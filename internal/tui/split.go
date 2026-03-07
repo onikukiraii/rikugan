@@ -121,9 +121,8 @@ func (m *SplitModel) BuildLines(file diff.DiffFile, fileIdx int) {
 			}
 		}
 	}
-	if m.cursor >= len(m.leftPane) {
-		m.cursor = max(0, len(m.leftPane)-1)
-	}
+	m.cursor = 0
+	m.offset = 0
 }
 
 // SetSize updates the viewport dimensions.

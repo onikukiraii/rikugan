@@ -52,9 +52,8 @@ func (m *InlineModel) BuildLines(file diff.DiffFile, fileIdx int) {
 			})
 		}
 	}
-	if m.cursor >= len(m.lines) {
-		m.cursor = max(0, len(m.lines)-1)
-	}
+	m.cursor = 0
+	m.offset = 0
 }
 
 func (m *InlineModel) renderDiffLine(line diff.DiffLine) string {
