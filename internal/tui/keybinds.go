@@ -11,10 +11,13 @@ type KeyMap struct {
 	Bottom     string
 	NextFile   string
 	PrevFile   string
+	NextHunk   string
+	PrevHunk   string
 	Comment    string
 	DelComment string
-	Copy       string
-	ToggleMode string
+	Copy        string
+	CopySummary string
+	ToggleMode  string
 	PaneLeft   string
 	PaneRight  string
 	Help       string
@@ -32,10 +35,13 @@ func DefaultKeyMap() KeyMap {
 		Bottom:     "G",
 		NextFile:   "tab",
 		PrevFile:   "shift+tab",
+		NextHunk:   "]",
+		PrevHunk:   "[",
 		Comment:    "c",
 		DelComment: "d",
-		Copy:       "y",
-		ToggleMode: "V",
+		Copy:        "y",
+		CopySummary: "Y",
+		ToggleMode:  "V",
 		PaneLeft:   "h",
 		PaneRight:  "l",
 		Help:       "?",

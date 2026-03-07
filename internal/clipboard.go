@@ -14,6 +14,46 @@ func CopyToClipboard(files []diff.DiffFile, comments map[diff.LineKey]string) er
 	return clipboard.WriteAll(text)
 }
 
+// CopyCommentsOnly copies only the comment summary to clipboard.
+func CopyCommentsOnly(files []diff.DiffFile, comments map[diff.LineKey]string) error {
+	text := FormatCommentsOnly(files, comments)
+	return clipboard.WriteAll(text)
+}
+
+// FormatCommentsOnly generates a compact summary of comments without the full diff.
+func FormatCommentsOnly(files []diff.DiffFile, comments map[diff.LineKey]string) string {
+	if len(comments) == 0 {
+		return ""
+	}
+
+	var sb strings.Builder
+	sb.WriteString("## Review Comments\n\n")
+
+	for key, comment := range comments {
+		f := files[key.FileIndex]
+		h := f.Hunks[key.HunkIndex]
+		line := h.Lines[key.LineIndex]
+		lineNum := line.NewNum
+		if lineNum == 0 {
+			lineNum = line.OldNum
+		}
+
+		var prefix string
+		switch line.Type {
+		case diff.LineAdded:
+			prefix = "+"
+		case diff.LineRemoved:
+			prefix = "-"
+		default:
+			prefix = " "
+		}
+
+		sb.WriteString(fmt.Sprintf("- **%s:%d** `%s%s`\n  %s\n", f.DisplayName(), lineNum, prefix, line.Content, comment))
+	}
+
+	return sb.String()
+}
+
 // FormatForAI generates a review-ready text with inline comments.
 func FormatForAI(files []diff.DiffFile, comments map[diff.LineKey]string) string {
 	var sb strings.Builder

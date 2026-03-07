@@ -27,14 +27,16 @@ type Model struct {
 	inline    InlineModel
 	split     SplitModel
 	comments  map[diff.LineKey]string
-	editor    CommentEditor
-	keys      KeyMap
+	editor     CommentEditor
+	filePicker FilePicker
+	keys       KeyMap
 	width     int
 	height    int
 	err       error
 	showHelp  bool
-	copied    bool
-	gPressed  bool // for gg detection
+	copied       bool
+	copiedMsg    string
+	gPressed bool // for gg detection
 }
 
 // New creates a new Model.
@@ -42,8 +44,9 @@ func New(files []diff.DiffFile) Model {
 	m := Model{
 		files:    files,
 		comments: make(map[diff.LineKey]string),
-		editor:   NewCommentEditor(),
-		keys:     DefaultKeyMap(),
+		editor:     NewCommentEditor(),
+		filePicker: NewFilePicker(),
+		keys:       DefaultKeyMap(),
 		inline:   NewInlineModel(),
 		split:    NewSplitModel(),
 	}
@@ -81,6 +84,16 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			}
 		}
 		return m, nil
+	}
+
+	// Handle file picker input
+	if m.filePicker.active {
+		idx, confirmed, cmd := m.filePicker.Update(msg)
+		if confirmed && idx >= 0 {
+			m.fileIdx = idx
+			m.rebuildLines()
+		}
+		return m, cmd
 	}
 
 	// Handle comment editor input
@@ -126,16 +139,16 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	switch key {
-	case m.keys.Quit, "esc":
+	case m.keys.Quit, "esc", "ctrl+c":
 		if m.showHelp {
 			m.showHelp = false
 			return m, nil
 		}
 		return m, tea.Quit
 
-	case m.keys.Down:
+	case m.keys.Down, "down":
 		m.currentView().MoveDown(1)
-	case m.keys.Up:
+	case m.keys.Up, "up":
 		m.currentView().MoveUp(1)
 	case m.keys.HalfPageDn:
 		m.currentView().MoveDown(m.height / 2)
@@ -159,6 +172,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.rebuildLines()
 		}
 
+	case m.keys.NextHunk:
+		m.currentView().NextHunk()
+	case m.keys.PrevHunk:
+		m.currentView().PrevHunk()
+
 	case m.keys.Comment:
 		if key, ok := m.currentView().CurrentLineKey(); ok {
 			existing := m.comments[key]
@@ -174,6 +192,13 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case m.keys.Copy:
 		if err := internal.CopyToClipboard(m.files, m.comments); err == nil {
 			m.copied = true
+			m.copiedMsg = "Copied (full)!"
+		}
+
+	case m.keys.CopySummary:
+		if err := internal.CopyCommentsOnly(m.files, m.comments); err == nil {
+			m.copied = true
+			m.copiedMsg = "Copied (comments only)!"
 		}
 
 	case m.keys.ToggleMode:
@@ -194,6 +219,10 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 
 	case m.keys.Help:
 		m.showHelp = !m.showHelp
+
+	case "space":
+		cmd := m.filePicker.Open(m.files, m.comments)
+		return m, cmd
 	}
 
 	return m, nil
@@ -204,6 +233,8 @@ type diffView interface {
 	MoveDown(int)
 	GoTop()
 	GoBottom()
+	NextHunk()
+	PrevHunk()
 	CurrentLineKey() (diff.LineKey, bool)
 }
 
@@ -238,8 +269,10 @@ func (m Model) View() tea.View {
 	sb.WriteString(m.renderFileTabs())
 	sb.WriteString("\n")
 
-	// Diff content
-	if m.mode == ModeInline {
+	// File picker replaces diff content when active
+	if m.filePicker.active {
+		sb.WriteString(m.filePicker.View(m.width))
+	} else if m.mode == ModeInline {
 		sb.WriteString(m.inline.View(m.comments))
 	} else {
 		sb.WriteString(m.split.View(m.comments))
@@ -299,7 +332,7 @@ func (m Model) renderStatusBar() string {
 		m.fileIdx+1, len(m.files), len(m.comments))
 
 	if m.copied {
-		info += "│ Copied! "
+		info += "│ " + m.copiedMsg + " "
 	}
 
 	right := styleStatusBarSection.Render(info)
@@ -314,10 +347,12 @@ func (m Model) renderStatusBar() string {
 
 func (m Model) renderHelp() string {
 	help := []string{
-		"j/k: up/down  Ctrl+d/u: half page  gg/G: top/bottom",
-		"Tab/Shift+Tab: next/prev file  V: toggle split",
-		"c: comment  d: delete comment  y: copy to clipboard",
-		"h/l: switch pane (split mode)  q: quit  ?: toggle help",
+		"j/k/arrows: up/down  Ctrl+d/u: half page  gg/G: top/bottom  ]/[: next/prev hunk",
+		"Tab/Shift+Tab: next/prev file  Space: fuzzy find file",
+		"c: comment  d: delete comment",
+		"y: copy diff+comments  Y: copy comments only",
+		"V: toggle split  h/l: switch pane (split mode)",
+		"q: quit  ?: toggle help",
 	}
 	var sb strings.Builder
 	for _, line := range help {

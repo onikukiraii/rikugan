@@ -19,6 +19,10 @@ var (
 	colorOrange  = color.RGBA{0xFA, 0xB3, 0x87, 0xFF}
 	colorMagenta = color.RGBA{0xCB, 0xA6, 0xF7, 0xFF}
 
+	// Subtle background tints for diff lines
+	colorBgAdded   = color.RGBA{0x1A, 0x2E, 0x1A, 0xFF} // dark green tint
+	colorBgRemoved = color.RGBA{0x2E, 0x1A, 0x1A, 0xFF} // dark red tint
+
 	// Line styles
 	styleAdded = lipgloss.NewStyle().
 			Foreground(colorGreen)
@@ -36,6 +40,16 @@ var (
 
 	styleLineNumActive = lipgloss.NewStyle().
 				Foreground(colorBlue).
+				Width(5).
+				Align(lipgloss.Right)
+
+	styleLineNumAdded = lipgloss.NewStyle().
+				Foreground(colorGreen).
+				Width(5).
+				Align(lipgloss.Right)
+
+	styleLineNumRemoved = lipgloss.NewStyle().
+				Foreground(colorRed).
 				Width(5).
 				Align(lipgloss.Right)
 
@@ -77,6 +91,24 @@ var (
 
 	styleCursorLine = lipgloss.NewStyle().
 			Background(colorBgLight)
+
+	// Line background styles (applied to entire line for diff visibility)
+	styleBgAdded = lipgloss.NewStyle().
+			Background(colorBgAdded)
+
+	styleBgRemoved = lipgloss.NewStyle().
+			Background(colorBgRemoved)
+
+	// Word diff: highlight the specific characters that changed
+	styleWordDiffAdded = lipgloss.NewStyle().
+				Foreground(colorGreen).
+				Background(color.RGBA{0x2A, 0x4A, 0x2A, 0xFF}).
+				Bold(true)
+
+	styleWordDiffRemoved = lipgloss.NewStyle().
+				Foreground(colorRed).
+				Background(color.RGBA{0x4A, 0x2A, 0x2A, 0xFF}).
+				Bold(true)
 
 	styleHelp = lipgloss.NewStyle().
 			Foreground(colorDim)

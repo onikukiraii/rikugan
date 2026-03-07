@@ -11,21 +11,24 @@ import (
 
 // SplitModel handles the side-by-side diff view.
 type SplitModel struct {
-	cursor    int
-	offset    int
-	height    int
-	width     int
-	leftPane  []splitLine
-	rightPane []splitLine
-	activePane int // 0 = left (old), 1 = right (new)
+	cursor      int
+	offset      int
+	height      int
+	width       int
+	leftPane    []splitLine
+	rightPane   []splitLine
+	activePane  int // 0 = left (old), 1 = right (new)
+	highlighter Highlighter
 }
 
 type splitLine struct {
-	key     diff.LineKey
-	lineNum int
-	content string
+	key      diff.LineKey
+	lineNum  int
+	content  string
 	lineType diff.LineType
-	empty   bool // padding line for alignment
+	empty    bool          // padding line for alignment
+	isHunk   bool          // hunk separator line
+	segments []DiffSegment // word-level diff segments (nil = no word diff)
 }
 
 // NewSplitModel creates a new split view model.
@@ -37,11 +40,12 @@ func NewSplitModel() SplitModel {
 func (m *SplitModel) BuildLines(file diff.DiffFile, fileIdx int) {
 	m.leftPane = nil
 	m.rightPane = nil
+	m.highlighter = NewHighlighter(file.DisplayName())
 
 	for hi, h := range file.Hunks {
 		// Add hunk separator
-		m.leftPane = append(m.leftPane, splitLine{empty: true, content: "────"})
-		m.rightPane = append(m.rightPane, splitLine{empty: true, content: "────"})
+		m.leftPane = append(m.leftPane, splitLine{empty: true, isHunk: true, content: "────"})
+		m.rightPane = append(m.rightPane, splitLine{empty: true, isHunk: true, content: "────"})
 
 		li := 0
 		for li < len(h.Lines) {
@@ -71,27 +75,40 @@ func (m *SplitModel) BuildLines(file diff.DiffFile, fileIdx int) {
 					li++
 					added = append(added, li)
 				}
-				// Pair them up
+				// Pair them up with word-level diff
 				maxLen := max(len(removed), len(added))
 				for j := 0; j < maxLen; j++ {
+					var leftLine, rightLine splitLine
+
 					if j < len(removed) {
 						idx := removed[j]
 						k := diff.LineKey{FileIndex: fileIdx, HunkIndex: hi, LineIndex: idx}
-						m.leftPane = append(m.leftPane, splitLine{
+						leftLine = splitLine{
 							key: k, lineNum: h.Lines[idx].OldNum, content: h.Lines[idx].Content, lineType: diff.LineRemoved,
-						})
+						}
 					} else {
-						m.leftPane = append(m.leftPane, splitLine{empty: true})
+						leftLine = splitLine{empty: true}
 					}
+
 					if j < len(added) {
 						idx := added[j]
 						k := diff.LineKey{FileIndex: fileIdx, HunkIndex: hi, LineIndex: idx}
-						m.rightPane = append(m.rightPane, splitLine{
+						rightLine = splitLine{
 							key: k, lineNum: h.Lines[idx].NewNum, content: h.Lines[idx].Content, lineType: diff.LineAdded,
-						})
+						}
 					} else {
-						m.rightPane = append(m.rightPane, splitLine{empty: true})
+						rightLine = splitLine{empty: true}
 					}
+
+					// Compute word diff for paired lines
+					if !leftLine.empty && !rightLine.empty {
+						oldSegs, newSegs := ComputeWordDiff(leftLine.content, rightLine.content)
+						leftLine.segments = oldSegs
+						rightLine.segments = newSegs
+					}
+
+					m.leftPane = append(m.leftPane, leftLine)
+					m.rightPane = append(m.rightPane, rightLine)
 				}
 				li++
 
@@ -146,6 +163,28 @@ func (m *SplitModel) GoTop() {
 func (m *SplitModel) GoBottom() {
 	m.cursor = len(m.leftPane) - 1
 	m.ensureVisible()
+}
+
+// NextHunk moves to the next hunk separator.
+func (m *SplitModel) NextHunk() {
+	for i := m.cursor + 1; i < len(m.leftPane); i++ {
+		if m.leftPane[i].isHunk {
+			m.cursor = i
+			m.ensureVisible()
+			return
+		}
+	}
+}
+
+// PrevHunk moves to the previous hunk separator.
+func (m *SplitModel) PrevHunk() {
+	for i := m.cursor - 1; i >= 0; i-- {
+		if m.leftPane[i].isHunk {
+			m.cursor = i
+			m.ensureVisible()
+			return
+		}
+	}
 }
 
 // TogglePane switches the active pane.
@@ -235,22 +274,57 @@ func (m *SplitModel) renderSplitLine(line splitLine, paneWidth int, isCursor boo
 		numStr = "     "
 	}
 
-	var lineStyle lipgloss.Style
-	switch line.lineType {
-	case diff.LineAdded:
-		lineStyle = styleAdded
-	case diff.LineRemoved:
-		lineStyle = styleRemoved
-	default:
-		lineStyle = styleContext
+	highlighted := m.highlighter.Highlight(line.content)
+	if highlighted == "" {
+		highlighted = line.content
 	}
 
-	content := styleLineNum.Render(numStr[:4]) + " " + lineStyle.Render(line.content)
+	var codeContent string
+	if line.segments != nil {
+		// Word diff mode: highlight changed parts, syntax highlight unchanged parts
+		var changedStyle lipgloss.Style
+		if line.lineType == diff.LineAdded {
+			changedStyle = styleWordDiffAdded
+		} else {
+			changedStyle = styleWordDiffRemoved
+		}
+		var segBuf strings.Builder
+		for _, seg := range line.segments {
+			if seg.Changed {
+				segBuf.WriteString(changedStyle.Render(seg.Text))
+			} else {
+				segBuf.WriteString(m.highlighter.Highlight(seg.Text))
+			}
+		}
+		codeContent = segBuf.String()
+	} else {
+		codeContent = highlighted
+	}
+
+	var numStyle lipgloss.Style
+	switch line.lineType {
+	case diff.LineAdded:
+		numStyle = styleLineNumAdded
+	case diff.LineRemoved:
+		numStyle = styleLineNumRemoved
+	default:
+		numStyle = styleLineNum
+	}
+
+	content := numStyle.Render(numStr[:4]) + " " + codeContent
 
 	// Truncate or pad to pane width
 	contentWidth := lipgloss.Width(content)
 	if contentWidth < paneWidth {
 		content += strings.Repeat(" ", paneWidth-contentWidth)
+	}
+
+	// Apply diff background tint
+	switch line.lineType {
+	case diff.LineAdded:
+		content = styleBgAdded.Render(content)
+	case diff.LineRemoved:
+		content = styleBgRemoved.Render(content)
 	}
 
 	if isCursor {

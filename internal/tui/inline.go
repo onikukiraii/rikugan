@@ -4,18 +4,17 @@ import (
 	"fmt"
 	"strings"
 
-	"charm.land/lipgloss/v2"
-
 	"github.com/onikukiraii/rikugan/internal/diff"
 )
 
 // InlineModel handles the inline diff view.
 type InlineModel struct {
-	cursor int
-	offset int
-	height int
-	width  int
-	lines  []renderedLine
+	cursor      int
+	offset      int
+	height      int
+	width       int
+	lines       []renderedLine
+	highlighter Highlighter
 }
 
 type renderedLine struct {
@@ -33,6 +32,7 @@ func NewInlineModel() InlineModel {
 // BuildLines constructs the renderable lines from a DiffFile.
 func (m *InlineModel) BuildLines(file diff.DiffFile, fileIdx int) {
 	m.lines = nil
+	m.highlighter = NewHighlighter(file.DisplayName())
 	for hi, h := range file.Hunks {
 		header := fmt.Sprintf("@@ -%d,%d +%d,%d @@", h.OldStart, h.OldCount, h.NewStart, h.NewCount)
 		if h.Header != "" {
@@ -70,22 +70,22 @@ func (m *InlineModel) renderDiffLine(line diff.DiffLine) string {
 		newNum = "    "
 	}
 
-	var lineStyle lipgloss.Style
-	var prefix string
-	switch line.Type {
-	case diff.LineAdded:
-		lineStyle = styleAdded
-		prefix = "+"
-	case diff.LineRemoved:
-		lineStyle = styleRemoved
-		prefix = "-"
-	default:
-		lineStyle = styleContext
-		prefix = " "
+	highlighted := m.highlighter.Highlight(line.Content)
+	if highlighted == "" {
+		highlighted = line.Content
 	}
 
-	nums := styleLineNum.Render(oldNum) + " " + styleLineNum.Render(newNum) + " "
-	return nums + lineStyle.Render(prefix+line.Content)
+	switch line.Type {
+	case diff.LineAdded:
+		nums := styleLineNumAdded.Render(oldNum) + " " + styleLineNumAdded.Render(newNum) + " "
+		return styleBgAdded.Render(nums + highlighted)
+	case diff.LineRemoved:
+		nums := styleLineNumRemoved.Render(oldNum) + " " + styleLineNumRemoved.Render(newNum) + " "
+		return styleBgRemoved.Render(nums + highlighted)
+	default:
+		nums := styleLineNum.Render(oldNum) + " " + styleLineNum.Render(newNum) + " "
+		return nums + highlighted
+	}
 }
 
 // SetSize updates the viewport dimensions.
@@ -125,6 +125,28 @@ func (m *InlineModel) GoTop() {
 func (m *InlineModel) GoBottom() {
 	m.cursor = len(m.lines) - 1
 	m.ensureVisible()
+}
+
+// NextHunk moves to the next hunk header.
+func (m *InlineModel) NextHunk() {
+	for i := m.cursor + 1; i < len(m.lines); i++ {
+		if m.lines[i].isHunk {
+			m.cursor = i
+			m.ensureVisible()
+			return
+		}
+	}
+}
+
+// PrevHunk moves to the previous hunk header.
+func (m *InlineModel) PrevHunk() {
+	for i := m.cursor - 1; i >= 0; i-- {
+		if m.lines[i].isHunk {
+			m.cursor = i
+			m.ensureVisible()
+			return
+		}
+	}
 }
 
 func (m *InlineModel) ensureVisible() {
