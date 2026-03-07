@@ -1,0 +1,33 @@
+<svg width="100" height="100" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="irisGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9966CC;stop-opacity:1" /> <stop offset="100%" style="stop-color:#4B0082;stop-opacity:1" /> </linearGradient>
+  </defs>
+
+  <rect width="100" height="100" fill="#2D2D2D" />
+
+  <path d="M50 25C35 25 22 35 15 50C22 65 35 75 50 75C65 75 78 65 85 50C78 35 65 25 50 25Z" fill="none" stroke="white" stroke-width="3" />
+
+  <path d="M50 38C43.3726 38 38 43.3726 38 50C38 56.6274 43.3726 62 50 62C56.6274 62 62 56.6274 62 50C62 43.3726 56.6274 38 50 38ZM50 42C54.4183 42 58 45.5817 58 50C58 54.4183 54.4183 58 50 58C45.5817 58 42 54.4183 42 50C42 45.5817 45.5817 42 50 42Z" fill="url(#irisGradient)" />
+  <path d="M50 38L50 42" stroke="white" stroke-width="1"/>
+  <path d="M50 58L50 62" stroke="white" stroke-width="1"/>
+  <path d="M38 50L42 50" stroke="white" stroke-width="1"/>
+  <path d="M58 50L62 50" stroke="white" stroke-width="1"/>
+  <path d="M41.5 41.5L44.5 44.5" stroke="white" stroke-width="1"/>
+  <path d="M55.5 55.5L58.5 58.5" stroke="white" stroke-width="1"/>
+  <path d="M55.5 41.5L58.5 44.5" stroke="white" stroke-width="1"/>
+  <path d="M41.5 55.5L44.5 58.5" stroke="white" stroke-width="1"/>
+
+  <polygon points="50,47 51,49 53,50 51,51 50,53 49,51 47,50 49,49" fill="white" />
+
+  <rect x="20" y="80" width="25" height="4" rx="1" fill="#CD5C5C" />
+  <rect x="20" y="87" width="20" height="4" rx="1" fill="#CD5C5C" />
+
+  <rect x="55" y="80" width="30" height="4" rx="1" fill="#90EE90" />
+  <rect x="55" y="87" width="25" height="4" rx="1" fill="#90EE90" id="commented-bar" />
+
+  <circle cx="70" cy="89" r="3" fill="#FFD700" />
+
+  <path d="M85 89C90 89 93 86 93 81M93 81L89 83M93 81L95 83" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+
+</svg>
