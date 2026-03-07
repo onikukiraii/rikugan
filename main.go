@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strings"
 
 	tea "charm.land/bubbletea/v2"
 
@@ -23,7 +24,8 @@ func main() {
 		fmt.Fprintf(os.Stderr, "  rikugan                    # unstaged changes\n")
 		fmt.Fprintf(os.Stderr, "  rikugan --staged            # staged changes\n")
 		fmt.Fprintf(os.Stderr, "  rikugan HEAD~3              # last 3 commits\n")
-		fmt.Fprintf(os.Stderr, "  rikugan main..feature       # branch diff\n\n")
+		fmt.Fprintf(os.Stderr, "  rikugan main..feature       # branch diff\n")
+		fmt.Fprintf(os.Stderr, "  rikugan <commit>            # view a specific commit\n\n")
 		flag.PrintDefaults()
 	}
 	flag.Parse()
@@ -34,11 +36,18 @@ func main() {
 	}
 
 	args := flag.Args()
-	if *staged {
-		args = append([]string{"--cached"}, args...)
-	}
 
-	files, err := diff.Run(args)
+	var files []diff.DiffFile
+	var err error
+	if len(args) == 1 && !strings.Contains(args[0], "..") && diff.IsCommit(args[0]) {
+		// Single commit ref: use git show to display that commit's changes
+		files, err = diff.Show(args)
+	} else {
+		if *staged {
+			args = append([]string{"--cached"}, args...)
+		}
+		files, err = diff.Run(args)
+	}
 	if err != nil {
 		runWithError(err)
 		return

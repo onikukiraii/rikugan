@@ -67,6 +67,7 @@ rikugan                     # unstaged changes
 rikugan --staged            # staged changes
 rikugan HEAD~3              # last 3 commits
 rikugan main..feature       # branch diff
+rikugan <commit>            # view a specific commit
 rikugan --version           # show version
 ```
 

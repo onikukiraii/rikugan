@@ -25,6 +25,33 @@ func Run(args []string) ([]DiffFile, error) {
 	return Parse(string(out))
 }
 
+// Show executes git show with the given commit and parses the diff output.
+func Show(args []string) ([]DiffFile, error) {
+	cmdArgs := append([]string{"show", "--format="}, args...)
+	cmd := exec.Command("git", cmdArgs...)
+	out, err := cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			return nil, fmt.Errorf("git show failed: %s", string(exitErr.Stderr))
+		}
+		return nil, fmt.Errorf("git show failed: %w", err)
+	}
+	if len(out) == 0 {
+		return nil, nil
+	}
+	return Parse(string(out))
+}
+
+// IsCommit checks if the given ref resolves to a commit object.
+func IsCommit(ref string) bool {
+	cmd := exec.Command("git", "cat-file", "-t", ref)
+	out, err := cmd.Output()
+	if err != nil {
+		return false
+	}
+	return strings.TrimSpace(string(out)) == "commit"
+}
+
 // Parse parses unified diff text into DiffFile structs.
 func Parse(text string) ([]DiffFile, error) {
 	fileDiffs, err := godiff.ParseMultiFileDiff([]byte(text))
