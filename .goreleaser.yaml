@@ -26,10 +26,4 @@ changelog:
       - "^docs:"
       - "^test:"
 
-homebrew_casks:
-  - repository:
-      owner: onikukiraii
-      name: homebrew-rikugan
-    homepage: "https://github.com/onikukiraii/rikugan"
-    description: "TUI diff reviewer for AI prompts"
-    license: "MIT"
+# Homebrew formula is manually maintained in onikukiraii/homebrew-rikugan
