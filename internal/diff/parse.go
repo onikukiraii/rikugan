@@ -80,7 +80,7 @@ func parseHunk(h *godiff.Hunk) Hunk {
 		}
 
 		prefix := line[0]
-		content := line[1:]
+		content := expandTabs(line[1:], 4)
 
 		switch prefix {
 		case '+':
@@ -109,6 +109,10 @@ func parseHunk(h *godiff.Hunk) Hunk {
 		}
 	}
 	return hunk
+}
+
+func expandTabs(s string, tabWidth int) string {
+	return strings.ReplaceAll(s, "\t", strings.Repeat(" ", tabWidth))
 }
 
 func stripPrefix(name string) string {
