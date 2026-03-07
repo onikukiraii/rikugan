@@ -12,16 +12,9 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}}
 
-brews:
-  - repository:
-      owner: onikukiraii
-      name: homebrew-rikugan
-    homepage: "https://github.com/onikukiraii/rikugan"
-    description: "TUI diff reviewer for AI prompts"
-    license: "MIT"
-
 archives:
-  - format: tar.gz
+  - formats:
+      - tar.gz
 
 checksum:
   name_template: "checksums.txt"
@@ -32,3 +25,11 @@ changelog:
     exclude:
       - "^docs:"
       - "^test:"
+
+homebrew_casks:
+  - repository:
+      owner: onikukiraii
+      name: homebrew-rikugan
+    homepage: "https://github.com/onikukiraii/rikugan"
+    description: "TUI diff reviewer for AI prompts"
+    license: "MIT"
