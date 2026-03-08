@@ -318,16 +318,16 @@ func (m *SplitModel) renderSplitLine(line splitLine, paneWidth int, isCursor boo
 		content += strings.Repeat(" ", paneWidth-contentWidth)
 	}
 
-	// Apply diff background tint
-	switch line.lineType {
-	case diff.LineAdded:
-		content = styleBgAdded.Render(content)
-	case diff.LineRemoved:
-		content = styleBgRemoved.Render(content)
-	}
-
+	// Apply cursor highlight or diff background tint (cursor takes priority)
 	if isCursor {
 		content = styleCursorLine.Render(content)
+	} else {
+		switch line.lineType {
+		case diff.LineAdded:
+			content = styleBgAdded.Render(content)
+		case diff.LineRemoved:
+			content = styleBgRemoved.Render(content)
+		}
 	}
 	return content
 }

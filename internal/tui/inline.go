@@ -77,10 +77,10 @@ func (m *InlineModel) renderDiffLine(line diff.DiffLine) string {
 	switch line.Type {
 	case diff.LineAdded:
 		nums := styleLineNumAdded.Render(oldNum) + " " + styleLineNumAdded.Render(newNum) + " "
-		return styleBgAdded.Render(nums + highlighted)
+		return nums + highlighted
 	case diff.LineRemoved:
 		nums := styleLineNumRemoved.Render(oldNum) + " " + styleLineNumRemoved.Render(newNum) + " "
-		return styleBgRemoved.Render(nums + highlighted)
+		return nums + highlighted
 	default:
 		nums := styleLineNum.Render(oldNum) + " " + styleLineNum.Render(newNum) + " "
 		return nums + highlighted
@@ -187,6 +187,13 @@ func (m *InlineModel) View(comments map[diff.LineKey]string) string {
 
 		if i == m.cursor {
 			content = styleCursorLine.Render(content)
+		} else if line.rawLine != nil {
+			switch line.rawLine.Type {
+			case diff.LineAdded:
+				content = styleBgAdded.Render(content)
+			case diff.LineRemoved:
+				content = styleBgRemoved.Render(content)
+			}
 		}
 
 		sb.WriteString(content)
