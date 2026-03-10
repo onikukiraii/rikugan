@@ -350,7 +350,7 @@ func (m Model) renderHelp() string {
 		"j/k/arrows: up/down  Ctrl+d/u: half page  gg/G: top/bottom  ]/[: next/prev hunk",
 		"Tab/Shift+Tab: next/prev file  Space: fuzzy find file",
 		"c: comment  d: delete comment",
-		"y: copy diff+comments  Y: copy comments only",
+		"y: copy comments only  Y: copy diff+comments",
 		"V: toggle split  h/l: switch pane (split mode)",
 		"q: quit  ?: toggle help",
 	}

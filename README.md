@@ -108,8 +108,8 @@ The clipboard output is structured as Markdown with inline `# >> COMMENT:` marke
 |-----|--------|
 | `c` | Add comment to current line |
 | `d` | Delete comment on current line |
-| `y` | Copy diff + comments to clipboard |
-| `Y` | Copy comments only to clipboard |
+| `y` | Copy comments only to clipboard |
+| `Y` | Copy diff + comments to clipboard |
 
 ### General
 
