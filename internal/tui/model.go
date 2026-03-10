@@ -164,13 +164,17 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case m.keys.NextFile:
 		if m.fileIdx < len(m.files)-1 {
 			m.fileIdx++
-			m.rebuildLines()
+		} else {
+			m.fileIdx = 0
 		}
+		m.rebuildLines()
 	case m.keys.PrevFile:
 		if m.fileIdx > 0 {
 			m.fileIdx--
-			m.rebuildLines()
+		} else {
+			m.fileIdx = len(m.files) - 1
 		}
+		m.rebuildLines()
 
 	case m.keys.NextHunk:
 		m.currentView().NextHunk()
