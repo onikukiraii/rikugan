@@ -52,6 +52,45 @@ func IsCommit(ref string) bool {
 	return strings.TrimSpace(string(out)) == "commit"
 }
 
+// UntrackedFiles returns diff representations of untracked files.
+func UntrackedFiles() ([]DiffFile, error) {
+	cmd := exec.Command("git", "ls-files", "--others", "--exclude-standard")
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, fmt.Errorf("git ls-files failed: %w", err)
+	}
+	text := strings.TrimSpace(string(out))
+	if text == "" {
+		return nil, nil
+	}
+
+	var files []DiffFile
+	for _, path := range strings.Split(text, "\n") {
+		path = strings.TrimSpace(path)
+		if path == "" {
+			continue
+		}
+		// --no-index exits with code 1 when differences exist, but stdout
+		// still contains the diff output. CombinedOutput captures it reliably.
+		diffOut, _ := exec.Command("git", "diff", "--no-index", "--", "/dev/null", path).CombinedOutput()
+		if len(diffOut) == 0 {
+			continue
+		}
+		parsed, parseErr := Parse(string(diffOut))
+		if parseErr != nil || len(parsed) == 0 {
+			continue
+		}
+		for i := range parsed {
+			if parsed[i].OldName == "dev/null" || parsed[i].OldName == "/dev/null" {
+				parsed[i].OldName = "/dev/null"
+			}
+			parsed[i].NewName = path
+		}
+		files = append(files, parsed...)
+	}
+	return files, nil
+}
+
 // Parse parses unified diff text into DiffFile structs.
 func Parse(text string) ([]DiffFile, error) {
 	fileDiffs, err := godiff.ParseMultiFileDiff([]byte(text))

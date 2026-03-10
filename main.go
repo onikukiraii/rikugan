@@ -39,18 +39,28 @@ func main() {
 
 	var files []diff.DiffFile
 	var err error
+	includeUntracked := false
 	if len(args) == 1 && !strings.Contains(args[0], "..") && diff.IsCommit(args[0]) {
 		// Single commit ref: use git show to display that commit's changes
 		files, err = diff.Show(args)
 	} else {
 		if *staged {
 			args = append([]string{"--cached"}, args...)
+		} else if len(args) == 0 {
+			includeUntracked = true
 		}
 		files, err = diff.Run(args)
 	}
 	if err != nil {
 		runWithError(err)
 		return
+	}
+
+	if includeUntracked {
+		untracked, utErr := diff.UntrackedFiles()
+		if utErr == nil && len(untracked) > 0 {
+			files = append(files, untracked...)
+		}
 	}
 
 	m := tui.New(files)
