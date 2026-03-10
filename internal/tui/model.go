@@ -212,11 +212,11 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 			m.mode = ModeInline
 		}
 
-	case m.keys.PaneLeft:
+	case m.keys.PaneLeft, "left":
 		if m.mode == ModeSplit {
 			m.split.TogglePane(0)
 		}
-	case m.keys.PaneRight:
+	case m.keys.PaneRight, "right":
 		if m.mode == ModeSplit {
 			m.split.TogglePane(1)
 		}
