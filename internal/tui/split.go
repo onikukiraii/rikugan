@@ -28,6 +28,9 @@ type splitLine struct {
 	lineType diff.LineType
 	empty    bool          // padding line for alignment
 	isHunk   bool          // hunk separator line
+	isFold   bool          // fold indicator line
+	foldIndex int
+	foldLines int
 	segments []DiffSegment // word-level diff segments (nil = no word diff)
 }
 
@@ -37,12 +40,40 @@ func NewSplitModel() SplitModel {
 }
 
 // BuildLines constructs the side-by-side view from a DiffFile.
-func (m *SplitModel) BuildLines(file diff.DiffFile, fileIdx int) {
+func (m *SplitModel) BuildLines(file diff.DiffFile, fileIdx int, expandedFolds map[int][]diff.DiffLine, totalLines int) {
 	m.leftPane = nil
 	m.rightPane = nil
 	m.highlighter = NewHighlighter(file.DisplayName())
 
 	for hi, h := range file.Hunks {
+		// Fold region before this hunk
+		foldIdx := hi
+		var hiddenCount int
+		if hi == 0 {
+			hiddenCount = h.NewStart - 1
+		} else {
+			prevH := file.Hunks[hi-1]
+			hiddenCount = h.NewStart - (prevH.NewStart + prevH.NewCount)
+		}
+
+		if hiddenCount > 0 {
+			if expanded, ok := expandedFolds[foldIdx]; ok && len(expanded) > 0 {
+				for _, line := range expanded {
+					m.leftPane = append(m.leftPane, splitLine{
+						lineNum: line.OldNum, content: line.Content, lineType: diff.LineContext,
+					})
+					m.rightPane = append(m.rightPane, splitLine{
+						lineNum: line.NewNum, content: line.Content, lineType: diff.LineContext,
+					})
+				}
+			} else {
+				foldKey := diff.LineKey{FileIndex: fileIdx, HunkIndex: -1, LineIndex: foldIdx}
+				foldText := fmt.Sprintf("⋯ %d lines hidden ⋯", hiddenCount)
+				m.leftPane = append(m.leftPane, splitLine{key: foldKey, empty: true, isFold: true, foldIndex: foldIdx, foldLines: hiddenCount, content: foldText})
+				m.rightPane = append(m.rightPane, splitLine{key: foldKey, empty: true, isFold: true, foldIndex: foldIdx, foldLines: hiddenCount, content: foldText})
+			}
+		}
+
 		// Add hunk separator
 		m.leftPane = append(m.leftPane, splitLine{empty: true, isHunk: true, content: "────"})
 		m.rightPane = append(m.rightPane, splitLine{empty: true, isHunk: true, content: "────"})
@@ -121,6 +152,32 @@ func (m *SplitModel) BuildLines(file diff.DiffFile, fileIdx int) {
 			}
 		}
 	}
+
+	// Fold after last hunk
+	if totalLines > 0 && len(file.Hunks) > 0 {
+		lastH := file.Hunks[len(file.Hunks)-1]
+		lastNewEnd := lastH.NewStart + lastH.NewCount - 1
+		hiddenCount := totalLines - lastNewEnd
+		foldIdx := len(file.Hunks)
+		if hiddenCount > 0 {
+			if expanded, ok := expandedFolds[foldIdx]; ok && len(expanded) > 0 {
+				for _, line := range expanded {
+					m.leftPane = append(m.leftPane, splitLine{
+						lineNum: line.OldNum, content: line.Content, lineType: diff.LineContext,
+					})
+					m.rightPane = append(m.rightPane, splitLine{
+						lineNum: line.NewNum, content: line.Content, lineType: diff.LineContext,
+					})
+				}
+			} else {
+				foldKey := diff.LineKey{FileIndex: fileIdx, HunkIndex: -1, LineIndex: foldIdx}
+				foldText := fmt.Sprintf("⋯ %d lines hidden ⋯", hiddenCount)
+				m.leftPane = append(m.leftPane, splitLine{key: foldKey, empty: true, isFold: true, foldIndex: foldIdx, foldLines: hiddenCount, content: foldText})
+				m.rightPane = append(m.rightPane, splitLine{key: foldKey, empty: true, isFold: true, foldIndex: foldIdx, foldLines: hiddenCount, content: foldText})
+			}
+		}
+	}
+
 	m.cursor = 0
 	m.offset = 0
 }
@@ -207,13 +264,13 @@ func (m *SplitModel) CurrentLineKey() (diff.LineKey, bool) {
 	}
 	if m.activePane == 0 {
 		line := m.leftPane[m.cursor]
-		if line.empty {
+		if line.empty && !line.isFold {
 			return diff.LineKey{}, false
 		}
 		return line.key, true
 	}
 	line := m.rightPane[m.cursor]
-	if line.empty {
+	if line.empty && !line.isFold {
 		return diff.LineKey{}, false
 	}
 	return line.key, true
@@ -244,11 +301,13 @@ func (m *SplitModel) View(comments map[diff.LineKey]string) string {
 		sb.WriteString(left + separator + right + "\n")
 
 		// Show comments below the line
+		shown := make(map[diff.LineKey]bool)
 		for _, pane := range []splitLine{m.leftPane[i], m.rightPane[i]} {
-			if !pane.empty {
-				if comment, ok := comments[pane.key]; ok {
+			if !pane.empty || pane.isFold {
+				if comment, ok := comments[pane.key]; ok && !shown[pane.key] {
 					indicator := styleCommentIndicator.Render("  ▶ ")
 					sb.WriteString(indicator + styleComment.Render(comment) + "\n")
+					shown[pane.key] = true
 				}
 			}
 		}
@@ -259,6 +318,17 @@ func (m *SplitModel) View(comments map[diff.LineKey]string) string {
 
 func (m *SplitModel) renderSplitLine(line splitLine, paneWidth int, isCursor bool) string {
 	if line.empty {
+		if line.isFold {
+			content := styleFold.Render(line.content)
+			contentWidth := lipgloss.Width(content)
+			if contentWidth < paneWidth {
+				content += strings.Repeat(" ", paneWidth-contentWidth)
+			}
+			if isCursor {
+				return styleCursorLine.Render(content)
+			}
+			return content
+		}
 		content := strings.Repeat(" ", paneWidth)
 		if isCursor {
 			return styleCursorLine.Render(content)

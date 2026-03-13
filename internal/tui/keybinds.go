@@ -18,9 +18,10 @@ type KeyMap struct {
 	Copy        string
 	CopySummary string
 	ToggleMode  string
-	PaneLeft   string
-	PaneRight  string
-	Help       string
+	PaneLeft    string
+	PaneRight   string
+	ExpandFold  string
+	Help        string
 }
 
 // DefaultKeyMap returns the default keybindings.
@@ -42,8 +43,9 @@ func DefaultKeyMap() KeyMap {
 		Copy:        "Y",
 		CopySummary: "y",
 		ToggleMode:  "V",
-		PaneLeft:   "h",
-		PaneRight:  "l",
-		Help:       "?",
+		PaneLeft:    "h",
+		PaneRight:   "l",
+		ExpandFold:  "enter",
+		Help:        "?",
 	}
 }

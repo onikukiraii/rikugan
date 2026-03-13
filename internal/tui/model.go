@@ -37,18 +37,23 @@ type Model struct {
 	copied       bool
 	copiedMsg    string
 	gPressed bool // for gg detection
+
+	expandedFolds  map[int]map[int][]diff.DiffLine // fileIdx -> foldIdx -> lines
+	fileLinesCache map[int][]string                 // fileIdx -> file lines
 }
 
 // New creates a new Model.
 func New(files []diff.DiffFile) Model {
 	m := Model{
-		files:    files,
-		comments: make(map[diff.LineKey]string),
-		editor:     NewCommentEditor(),
-		filePicker: NewFilePicker(),
-		keys:       DefaultKeyMap(),
-		inline:   NewInlineModel(),
-		split:    NewSplitModel(),
+		files:          files,
+		comments:       make(map[diff.LineKey]string),
+		editor:         NewCommentEditor(),
+		filePicker:     NewFilePicker(),
+		keys:           DefaultKeyMap(),
+		inline:         NewInlineModel(),
+		split:          NewSplitModel(),
+		expandedFolds:  make(map[int]map[int][]diff.DiffLine),
+		fileLinesCache: make(map[int][]string),
 	}
 	if len(files) > 0 {
 		m.rebuildLines()
@@ -66,8 +71,30 @@ func (m *Model) rebuildLines() {
 		return
 	}
 	f := m.files[m.fileIdx]
-	m.inline.BuildLines(f, m.fileIdx)
-	m.split.BuildLines(f, m.fileIdx)
+	folds := m.expandedFolds[m.fileIdx]
+	totalLines := m.getTotalLines(m.fileIdx)
+	m.inline.BuildLines(f, m.fileIdx, folds, totalLines)
+	m.split.BuildLines(f, m.fileIdx, folds, totalLines)
+}
+
+func (m *Model) getTotalLines(fileIdx int) int {
+	if lines, ok := m.fileLinesCache[fileIdx]; ok {
+		return len(lines)
+	}
+	return -1
+}
+
+func (m *Model) getFileLines(fileIdx int) ([]string, error) {
+	if lines, ok := m.fileLinesCache[fileIdx]; ok {
+		return lines, nil
+	}
+	path := m.files[fileIdx].DisplayName()
+	lines, err := diff.ReadFileLines(path)
+	if err != nil {
+		return nil, err
+	}
+	m.fileLinesCache[fileIdx] = lines
+	return lines, nil
 }
 
 // Init implements tea.Model.
@@ -181,6 +208,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case m.keys.PrevHunk:
 		m.currentView().PrevHunk()
 
+	case m.keys.ExpandFold:
+		m.expandFold()
+
 	case m.keys.Comment:
 		if key, ok := m.currentView().CurrentLineKey(); ok {
 			existing := m.comments[key]
@@ -230,6 +260,112 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *Model) expandFold() {
+	// Check if cursor is on a fold line
+	var foldIdx int
+	var isFold bool
+
+	if m.mode == ModeInline {
+		if m.inline.cursor >= 0 && m.inline.cursor < len(m.inline.lines) {
+			line := m.inline.lines[m.inline.cursor]
+			if line.isFold {
+				foldIdx = line.foldIndex
+				isFold = true
+			}
+		}
+	} else {
+		if m.split.cursor >= 0 && m.split.cursor < len(m.split.leftPane) {
+			line := m.split.leftPane[m.split.cursor]
+			if line.isFold {
+				foldIdx = line.foldIndex
+				isFold = true
+			}
+		}
+	}
+
+	if !isFold {
+		return
+	}
+
+	file := m.files[m.fileIdx]
+	if len(file.Hunks) == 0 {
+		return
+	}
+
+	// Read file lines (cached)
+	fileLines, err := m.getFileLines(m.fileIdx)
+	if err != nil {
+		return
+	}
+
+	// Calculate line range for this fold
+	var newStart, newEnd int // 1-based, inclusive
+	var oldStart int
+
+	if foldIdx == 0 {
+		newStart = 1
+		newEnd = file.Hunks[0].NewStart - 1
+		oldStart = 1
+	} else if foldIdx < len(file.Hunks) {
+		prevH := file.Hunks[foldIdx-1]
+		newStart = prevH.NewStart + prevH.NewCount
+		newEnd = file.Hunks[foldIdx].NewStart - 1
+		oldStart = prevH.OldStart + prevH.OldCount
+	} else {
+		// After last hunk
+		lastH := file.Hunks[len(file.Hunks)-1]
+		newStart = lastH.NewStart + lastH.NewCount
+		newEnd = len(fileLines)
+		oldStart = lastH.OldStart + lastH.OldCount
+	}
+
+	if newStart > newEnd {
+		return
+	}
+
+	// Create DiffLines for the expanded content
+	var lines []diff.DiffLine
+	oldNum := oldStart
+	for lineNum := newStart; lineNum <= newEnd; lineNum++ {
+		idx := lineNum - 1
+		content := ""
+		if idx < len(fileLines) {
+			content = strings.ReplaceAll(fileLines[idx], "\t", "    ")
+		}
+		lines = append(lines, diff.DiffLine{
+			Type:    diff.LineContext,
+			Content: content,
+			OldNum:  oldNum,
+			NewNum:  lineNum,
+		})
+		oldNum++
+	}
+
+	// Store expanded fold
+	if m.expandedFolds[m.fileIdx] == nil {
+		m.expandedFolds[m.fileIdx] = make(map[int][]diff.DiffLine)
+	}
+	m.expandedFolds[m.fileIdx][foldIdx] = lines
+
+	// Save cursor positions
+	inlineCursor := m.inline.cursor
+	splitCursor := m.split.cursor
+
+	m.rebuildLines()
+
+	// Restore cursor positions
+	m.inline.cursor = inlineCursor
+	if m.inline.cursor >= len(m.inline.lines) {
+		m.inline.cursor = len(m.inline.lines) - 1
+	}
+	m.inline.ensureVisible()
+	m.split.cursor = splitCursor
+	if m.split.cursor >= len(m.split.leftPane) {
+		m.split.cursor = len(m.split.leftPane) - 1
+	}
+	m.split.ensureVisible()
 }
 
 type diffView interface {
@@ -353,9 +489,9 @@ func (m Model) renderHelp() string {
 	help := []string{
 		"j/k/arrows: up/down  Ctrl+d/u: half page  gg/G: top/bottom  ]/[: next/prev hunk",
 		"Tab/Shift+Tab: next/prev file  Space: fuzzy find file",
-		"c: comment  d: delete comment",
+		"Enter: expand hidden lines  c: comment  d: delete comment",
 		"y: copy comments only  Y: copy diff+comments",
-		"V: toggle split  h/l: switch pane (split mode)",
+		"V: toggle split  h/l/arrows: switch pane (split mode)",
 		"q: quit  ?: toggle help",
 	}
 	var sb strings.Builder

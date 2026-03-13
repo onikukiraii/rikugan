@@ -110,6 +110,10 @@ var (
 				Background(color.RGBA{0x4A, 0x2A, 0x2A, 0xFF}).
 				Bold(true)
 
+	styleFold = lipgloss.NewStyle().
+			Foreground(colorDim).
+			Italic(true)
+
 	styleHelp = lipgloss.NewStyle().
 			Foreground(colorDim)
 )

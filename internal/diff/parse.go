@@ -2,6 +2,7 @@ package diff
 
 import (
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -89,6 +90,23 @@ func UntrackedFiles() ([]DiffFile, error) {
 		files = append(files, parsed...)
 	}
 	return files, nil
+}
+
+// ReadFileLines reads a file and returns its lines.
+func ReadFileLines(path string) ([]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	text := string(data)
+	if text == "" {
+		return nil, nil
+	}
+	lines := strings.Split(text, "\n")
+	if len(lines) > 0 && lines[len(lines)-1] == "" {
+		lines = lines[:len(lines)-1]
+	}
+	return lines, nil
 }
 
 // Parse parses unified diff text into DiffFile structs.

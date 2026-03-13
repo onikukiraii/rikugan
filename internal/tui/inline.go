@@ -18,10 +18,13 @@ type InlineModel struct {
 }
 
 type renderedLine struct {
-	key     diff.LineKey
-	isHunk  bool
-	content string // pre-rendered content (without cursor highlight)
-	rawLine *diff.DiffLine
+	key       diff.LineKey
+	isHunk    bool
+	isFold    bool
+	foldIndex int
+	foldLines int
+	content   string // pre-rendered content (without cursor highlight)
+	rawLine   *diff.DiffLine
 }
 
 // NewInlineModel creates a new inline view model.
@@ -30,10 +33,39 @@ func NewInlineModel() InlineModel {
 }
 
 // BuildLines constructs the renderable lines from a DiffFile.
-func (m *InlineModel) BuildLines(file diff.DiffFile, fileIdx int) {
+func (m *InlineModel) BuildLines(file diff.DiffFile, fileIdx int, expandedFolds map[int][]diff.DiffLine, totalLines int) {
 	m.lines = nil
 	m.highlighter = NewHighlighter(file.DisplayName())
 	for hi, h := range file.Hunks {
+		// Fold region before this hunk
+		foldIdx := hi
+		var hiddenCount int
+		if hi == 0 {
+			hiddenCount = h.NewStart - 1
+		} else {
+			prevH := file.Hunks[hi-1]
+			hiddenCount = h.NewStart - (prevH.NewStart + prevH.NewCount)
+		}
+
+		if hiddenCount > 0 {
+			if expanded, ok := expandedFolds[foldIdx]; ok && len(expanded) > 0 {
+				for i := range expanded {
+					m.lines = append(m.lines, renderedLine{
+						rawLine: &expanded[i],
+						content: m.renderDiffLine(expanded[i]),
+					})
+				}
+			} else {
+				m.lines = append(m.lines, renderedLine{
+					key:       diff.LineKey{FileIndex: fileIdx, HunkIndex: -1, LineIndex: foldIdx},
+					isFold:    true,
+					foldIndex: foldIdx,
+					foldLines: hiddenCount,
+					content:   styleFold.Render(fmt.Sprintf("  ⋯⋯⋯ %d lines hidden (Enter to expand) ⋯⋯⋯", hiddenCount)),
+				})
+			}
+		}
+
 		header := fmt.Sprintf("@@ -%d,%d +%d,%d @@", h.OldStart, h.OldCount, h.NewStart, h.NewCount)
 		if h.Header != "" {
 			header += " " + h.Header
@@ -52,6 +84,33 @@ func (m *InlineModel) BuildLines(file diff.DiffFile, fileIdx int) {
 			})
 		}
 	}
+
+	// Fold after last hunk
+	if totalLines > 0 && len(file.Hunks) > 0 {
+		lastH := file.Hunks[len(file.Hunks)-1]
+		lastNewEnd := lastH.NewStart + lastH.NewCount - 1
+		hiddenCount := totalLines - lastNewEnd
+		foldIdx := len(file.Hunks)
+		if hiddenCount > 0 {
+			if expanded, ok := expandedFolds[foldIdx]; ok && len(expanded) > 0 {
+				for i := range expanded {
+					m.lines = append(m.lines, renderedLine{
+						rawLine: &expanded[i],
+						content: m.renderDiffLine(expanded[i]),
+					})
+				}
+			} else {
+				m.lines = append(m.lines, renderedLine{
+					key:       diff.LineKey{FileIndex: fileIdx, HunkIndex: -1, LineIndex: foldIdx},
+					isFold:    true,
+					foldIndex: foldIdx,
+					foldLines: hiddenCount,
+					content:   styleFold.Render(fmt.Sprintf("  ⋯⋯⋯ %d lines hidden (Enter to expand) ⋯⋯⋯", hiddenCount)),
+				})
+			}
+		}
+	}
+
 	m.cursor = 0
 	m.offset = 0
 }
