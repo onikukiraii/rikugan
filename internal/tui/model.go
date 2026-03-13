@@ -40,10 +40,14 @@ type Model struct {
 
 	expandedFolds  map[int]map[int][]diff.DiffLine // fileIdx -> foldIdx -> lines
 	fileLinesCache map[int][]string                 // fileIdx -> file lines
+
+	loader       DiffLoader
+	diffSig      string
+	watchEnabled bool
 }
 
 // New creates a new Model.
-func New(files []diff.DiffFile) Model {
+func New(files []diff.DiffFile, loader DiffLoader) Model {
 	m := Model{
 		files:          files,
 		comments:       make(map[diff.LineKey]string),
@@ -54,6 +58,9 @@ func New(files []diff.DiffFile) Model {
 		split:          NewSplitModel(),
 		expandedFolds:  make(map[int]map[int][]diff.DiffLine),
 		fileLinesCache: make(map[int][]string),
+		loader:         loader,
+		diffSig:        diffSignature(files),
+		watchEnabled:   true,
 	}
 	if len(files) > 0 {
 		m.rebuildLines()
@@ -99,6 +106,9 @@ func (m *Model) getFileLines(fileIdx int) ([]string, error) {
 
 // Init implements tea.Model.
 func (m Model) Init() tea.Cmd {
+	if m.watchEnabled {
+		return watchForChanges(m.loader, m.diffSig)
+	}
 	return nil
 }
 
@@ -140,6 +150,24 @@ func (m Model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		m.inline.SetSize(m.width, contentHeight)
 		m.split.SetSize(m.width, contentHeight)
 		return m, nil
+
+	case fileCheckMsg:
+		if msg.files != nil && msg.sig != m.diffSig {
+			if !m.editor.active && !m.filePicker.active {
+				m.reloadFiles(msg.files, msg.sig)
+			}
+		}
+		return m, watchForChanges(m.loader, m.diffSig)
+
+	case reloadResultMsg:
+		if msg.files != nil && msg.sig != m.diffSig {
+			m.reloadFiles(msg.files, msg.sig)
+			m.copied = true
+			m.copiedMsg = "Reloaded!"
+		} else {
+			m.copied = true
+			m.copiedMsg = "No changes"
+		}
 
 	case tea.KeyPressMsg:
 		return m.handleKey(msg)
@@ -211,6 +239,9 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	case m.keys.ExpandFold:
 		m.expandFold()
 
+	case m.keys.Reload:
+		return m, manualReload(m.loader)
+
 	case m.keys.Comment:
 		if key, ok := m.currentView().CurrentLineKey(); ok {
 			existing := m.comments[key]
@@ -260,6 +291,33 @@ func (m Model) handleKey(msg tea.KeyPressMsg) (tea.Model, tea.Cmd) {
 	}
 
 	return m, nil
+}
+
+func (m *Model) reloadFiles(newFiles []diff.DiffFile, sig string) {
+	// Preserve current file by name
+	currentName := ""
+	if m.fileIdx < len(m.files) {
+		currentName = m.files[m.fileIdx].DisplayName()
+	}
+
+	m.files = newFiles
+	m.diffSig = sig
+	m.fileIdx = 0
+
+	for i, f := range newFiles {
+		if f.DisplayName() == currentName {
+			m.fileIdx = i
+			break
+		}
+	}
+
+	// Clear caches since content changed
+	m.expandedFolds = make(map[int]map[int][]diff.DiffLine)
+	m.fileLinesCache = make(map[int][]string)
+
+	if len(m.files) > 0 {
+		m.rebuildLines()
+	}
 }
 
 func (m *Model) expandFold() {
@@ -492,7 +550,7 @@ func (m Model) renderHelp() string {
 		"Enter: expand hidden lines  c: comment  d: delete comment",
 		"y: copy comments only  Y: copy diff+comments",
 		"V: toggle split  h/l/arrows: switch pane (split mode)",
-		"q: quit  ?: toggle help",
+		"r: reload  q: quit  ?: toggle help",
 	}
 	var sb strings.Builder
 	for _, line := range help {

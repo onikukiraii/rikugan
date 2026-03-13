@@ -21,6 +21,7 @@ type KeyMap struct {
 	PaneLeft    string
 	PaneRight   string
 	ExpandFold  string
+	Reload      string
 	Help        string
 }
 
@@ -46,6 +47,7 @@ func DefaultKeyMap() KeyMap {
 		PaneLeft:    "h",
 		PaneRight:   "l",
 		ExpandFold:  "enter",
+		Reload:      "r",
 		Help:        "?",
 	}
 }
