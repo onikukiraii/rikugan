@@ -41,13 +41,13 @@ type Model struct {
 	expandedFolds  map[int]map[int][]diff.DiffLine // fileIdx -> foldIdx -> lines
 	fileLinesCache map[int][]string                 // fileIdx -> file lines
 
-	loader       DiffLoader
+	loader       Loader
 	diffSig      string
 	watchEnabled bool
 }
 
 // New creates a new Model.
-func New(files []diff.DiffFile, loader DiffLoader) Model {
+func New(files []diff.DiffFile, loader Loader) Model {
 	m := Model{
 		files:          files,
 		comments:       make(map[diff.LineKey]string),

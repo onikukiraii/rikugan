@@ -74,9 +74,11 @@ func (m *SplitModel) BuildLines(file diff.DiffFile, fileIdx int, expandedFolds m
 			}
 		}
 
-		// Add hunk separator
-		m.leftPane = append(m.leftPane, splitLine{empty: true, isHunk: true, content: "────"})
-		m.rightPane = append(m.rightPane, splitLine{empty: true, isHunk: true, content: "────"})
+		if !file.IsFullFile() {
+			// Add hunk separator
+			m.leftPane = append(m.leftPane, splitLine{empty: true, isHunk: true, content: "────"})
+			m.rightPane = append(m.rightPane, splitLine{empty: true, isHunk: true, content: "────"})
+		}
 
 		li := 0
 		for li < len(h.Lines) {

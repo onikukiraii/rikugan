@@ -37,19 +37,33 @@ func main() {
 
 	originalArgs := flag.Args()
 
-	var loader tui.DiffLoader
-	if len(originalArgs) == 1 && !strings.Contains(originalArgs[0], "..") && diff.IsCommit(originalArgs[0]) {
-		loader = tui.DiffLoader{UseShow: true, Args: originalArgs}
-	} else {
-		diffArgs := make([]string, len(originalArgs))
-		copy(diffArgs, originalArgs)
-		includeUntracked := false
-		if *staged {
-			diffArgs = append([]string{"--cached"}, diffArgs...)
-		} else if len(diffArgs) == 0 {
-			includeUntracked = true
+	var loader tui.Loader
+
+	// Check if the first argument is a file or directory
+	if len(originalArgs) == 1 && !*staged {
+		if info, statErr := os.Stat(originalArgs[0]); statErr == nil {
+			if info.IsDir() {
+				loader = tui.FileViewerLoader{Dir: originalArgs[0]}
+			} else if info.Mode().IsRegular() {
+				loader = tui.FileViewerLoader{Files: []string{originalArgs[0]}}
+			}
 		}
-		loader = tui.DiffLoader{Args: diffArgs, IncludeUntracked: includeUntracked}
+	}
+
+	if loader == nil {
+		if len(originalArgs) == 1 && !strings.Contains(originalArgs[0], "..") && diff.IsCommit(originalArgs[0]) {
+			loader = tui.DiffLoader{UseShow: true, Args: originalArgs}
+		} else {
+			diffArgs := make([]string, len(originalArgs))
+			copy(diffArgs, originalArgs)
+			includeUntracked := false
+			if *staged {
+				diffArgs = append([]string{"--cached"}, diffArgs...)
+			} else if len(diffArgs) == 0 {
+				includeUntracked = true
+			}
+			loader = tui.DiffLoader{Args: diffArgs, IncludeUntracked: includeUntracked}
+		}
 	}
 
 	files, err := loader.Load()

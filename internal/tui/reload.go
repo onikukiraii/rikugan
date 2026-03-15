@@ -10,6 +10,11 @@ import (
 	"github.com/onikukiraii/rikugan/internal/diff"
 )
 
+// Loader is the interface for loading displayable files.
+type Loader interface {
+	Load() ([]diff.DiffFile, error)
+}
+
 // DiffLoader knows how to load diff files.
 type DiffLoader struct {
 	UseShow          bool
@@ -50,7 +55,7 @@ type reloadResultMsg struct {
 	sig   string
 }
 
-func watchForChanges(loader DiffLoader, currentSig string) tea.Cmd {
+func watchForChanges(loader Loader, currentSig string) tea.Cmd {
 	return func() tea.Msg {
 		time.Sleep(2 * time.Second)
 		files, err := loader.Load()
@@ -61,7 +66,7 @@ func watchForChanges(loader DiffLoader, currentSig string) tea.Cmd {
 	}
 }
 
-func manualReload(loader DiffLoader) tea.Cmd {
+func manualReload(loader Loader) tea.Cmd {
 	return func() tea.Msg {
 		files, err := loader.Load()
 		if err != nil {

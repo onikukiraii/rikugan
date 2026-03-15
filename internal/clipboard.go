@@ -2,6 +2,7 @@ package internal
 
 import (
 	"fmt"
+	"path/filepath"
 	"strings"
 
 	"github.com/atotto/clipboard"
@@ -38,17 +39,20 @@ func FormatCommentsOnly(files []diff.DiffFile, comments map[diff.LineKey]string)
 			lineNum = line.OldNum
 		}
 
-		var prefix string
-		switch line.Type {
-		case diff.LineAdded:
-			prefix = "+"
-		case diff.LineRemoved:
-			prefix = "-"
-		default:
-			prefix = " "
+		if f.IsFullFile() {
+			sb.WriteString(fmt.Sprintf("- **%s:%d** `%s`\n  %s\n", f.DisplayName(), lineNum, line.Content, comment))
+		} else {
+			var prefix string
+			switch line.Type {
+			case diff.LineAdded:
+				prefix = "+"
+			case diff.LineRemoved:
+				prefix = "-"
+			default:
+				prefix = " "
+			}
+			sb.WriteString(fmt.Sprintf("- **%s:%d** `%s%s`\n  %s\n", f.DisplayName(), lineNum, prefix, line.Content, comment))
 		}
-
-		sb.WriteString(fmt.Sprintf("- **%s:%d** `%s%s`\n  %s\n", f.DisplayName(), lineNum, prefix, line.Content, comment))
 	}
 
 	return sb.String()
@@ -63,30 +67,44 @@ func FormatForAI(files []diff.DiffFile, comments map[diff.LineKey]string) string
 
 	for fi, f := range files {
 		sb.WriteString(fmt.Sprintf("## %s\n\n", f.DisplayName()))
-		sb.WriteString("```diff\n")
 
-		for hi, h := range f.Hunks {
-			sb.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@", h.OldStart, h.OldCount, h.NewStart, h.NewCount))
-			if h.Header != "" {
-				sb.WriteString(" " + h.Header)
-			}
-			sb.WriteString("\n")
-
-			for li, line := range h.Lines {
-				var prefix string
-				switch line.Type {
-				case diff.LineAdded:
-					prefix = "+"
-				case diff.LineRemoved:
-					prefix = "-"
-				default:
-					prefix = " "
+		if f.IsFullFile() {
+			lang := extToLang(f.DisplayName())
+			sb.WriteString(fmt.Sprintf("```%s\n", lang))
+			for hi, h := range f.Hunks {
+				for li, line := range h.Lines {
+					sb.WriteString(line.Content + "\n")
+					key := diff.LineKey{FileIndex: fi, HunkIndex: hi, LineIndex: li}
+					if comment, ok := comments[key]; ok {
+						sb.WriteString(fmt.Sprintf("// >> COMMENT: %s\n", comment))
+					}
 				}
-				sb.WriteString(fmt.Sprintf("%s%s\n", prefix, line.Content))
+			}
+		} else {
+			sb.WriteString("```diff\n")
+			for hi, h := range f.Hunks {
+				sb.WriteString(fmt.Sprintf("@@ -%d,%d +%d,%d @@", h.OldStart, h.OldCount, h.NewStart, h.NewCount))
+				if h.Header != "" {
+					sb.WriteString(" " + h.Header)
+				}
+				sb.WriteString("\n")
 
-				key := diff.LineKey{FileIndex: fi, HunkIndex: hi, LineIndex: li}
-				if comment, ok := comments[key]; ok {
-					sb.WriteString(fmt.Sprintf("# >> COMMENT: %s\n", comment))
+				for li, line := range h.Lines {
+					var prefix string
+					switch line.Type {
+					case diff.LineAdded:
+						prefix = "+"
+					case diff.LineRemoved:
+						prefix = "-"
+					default:
+						prefix = " "
+					}
+					sb.WriteString(fmt.Sprintf("%s%s\n", prefix, line.Content))
+
+					key := diff.LineKey{FileIndex: fi, HunkIndex: hi, LineIndex: li}
+					if comment, ok := comments[key]; ok {
+						sb.WriteString(fmt.Sprintf("# >> COMMENT: %s\n", comment))
+					}
 				}
 			}
 		}
@@ -108,4 +126,37 @@ func FormatForAI(files []diff.DiffFile, comments map[diff.LineKey]string) string
 	}
 
 	return sb.String()
+}
+
+// extToLang maps a file extension to a code fence language identifier.
+func extToLang(path string) string {
+	ext := strings.ToLower(strings.TrimPrefix(filepath.Ext(path), "."))
+	switch ext {
+	case "go":
+		return "go"
+	case "py":
+		return "python"
+	case "js":
+		return "javascript"
+	case "ts":
+		return "typescript"
+	case "jsx":
+		return "jsx"
+	case "tsx":
+		return "tsx"
+	case "rb":
+		return "ruby"
+	case "rs":
+		return "rust"
+	case "sh", "bash", "zsh":
+		return "bash"
+	case "yml", "yaml":
+		return "yaml"
+	case "md":
+		return "markdown"
+	case "":
+		return ""
+	default:
+		return ext
+	}
 }

@@ -42,6 +42,12 @@ const (
 	LineRemoved
 )
 
+// IsFullFile returns true if this DiffFile represents a plain file view
+// (not a git diff), indicated by a single hunk starting at line 1 with no old name.
+func (f DiffFile) IsFullFile() bool {
+	return len(f.Hunks) == 1 && f.Hunks[0].NewStart == 1 && f.OldName == ""
+}
+
 // LineKey uniquely identifies a line in a diff for comment attachment.
 type LineKey struct {
 	FileIndex int

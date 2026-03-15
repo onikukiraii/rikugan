@@ -66,14 +66,16 @@ func (m *InlineModel) BuildLines(file diff.DiffFile, fileIdx int, expandedFolds 
 			}
 		}
 
-		header := fmt.Sprintf("@@ -%d,%d +%d,%d @@", h.OldStart, h.OldCount, h.NewStart, h.NewCount)
-		if h.Header != "" {
-			header += " " + h.Header
+		if !file.IsFullFile() {
+			header := fmt.Sprintf("@@ -%d,%d +%d,%d @@", h.OldStart, h.OldCount, h.NewStart, h.NewCount)
+			if h.Header != "" {
+				header += " " + h.Header
+			}
+			m.lines = append(m.lines, renderedLine{
+				isHunk:  true,
+				content: styleHunkHeader.Render(header),
+			})
 		}
-		m.lines = append(m.lines, renderedLine{
-			isHunk:  true,
-			content: styleHunkHeader.Render(header),
-		})
 
 		for li, line := range h.Lines {
 			key := diff.LineKey{FileIndex: fileIdx, HunkIndex: hi, LineIndex: li}
